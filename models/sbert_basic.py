@@ -47,6 +47,7 @@ from datetime import datetime
 import os
 import gzip
 import csv
+import pandas as pd
 
 #### Just some code to print debug information to stdout
 logging.basicConfig(format='%(asctime)s - %(message)s',
@@ -56,7 +57,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
 #### /print debug information to stdout
 
 #Check if dataset exsist. If not, download and extract  it
-sts_dataset_path = 'datasets/stsbenchmark.tsv.gz'  # REPLACE THIS WITH OUR DATASET "TUPLE-1", "TUPLE-2" , "SCORE"
+sts_dataset_path = 'datasets/'  # REPLACE THIS WITH OUR DATASET "TUPLE-1", "TUPLE-2" , "SCORE"
 
 if not os.path.exists(sts_dataset_path):
     util.http_get('https://sbert.net/datasets/stsbenchmark.tsv.gz', sts_dataset_path)
@@ -76,23 +77,37 @@ model_save_path = 'output/training_stsbenchmark_continue_training-'+model_name+'
 model = SentenceTransformer(model_name)
 
 # Convert the dataset to a DataLoader ready for training
-logging.info("Read STSbenchmark train dataset")
+logging.info("Read Drug dataset")
 
 train_samples = []
 dev_samples = []
 test_samples = []
-with gzip.open(sts_dataset_path, 'rt', encoding='utf8') as fIn:
-    reader = csv.DictReader(fIn, delimiter='\t', quoting=csv.QUOTE_NONE)
-    for row in reader:
-        score = float(row['score']) / 5.0  # Normalize score to range 0 ... 1
-        inp_example = InputExample(texts=[row['sentence1'], row['sentence2']], label=score)
 
-        if row['split'] == 'dev':
-            dev_samples.append(inp_example)
-        elif row['split'] == 'test':
-            test_samples.append(inp_example)
-        else:
-            train_samples.append(inp_example)
+positive_csv_reader =pd.read_csv(sts_dataset_path + "positive.csv")
+negative_csv_reader =pd.read_csv(sts_dataset_path + "negative.csv")
+
+for idx,row in positive_csv_reader.iterrows():
+    score = float(row['relevant'])  # Normalize score to range 0 ... 1
+    inp_example = InputExample(texts=[row['local_tuple'], row['external_tuple']], label=score)
+
+    if row['split'] == 'dev':
+        dev_samples.append(inp_example)
+    elif row['split'] == 'test':
+        test_samples.append(inp_example)
+    else:
+        train_samples.append(inp_example)
+
+
+for idx,row in negative_csv_reader.iterrows():
+    score = float(row['relevant'])  # Normalize score to range 0 ... 1
+    inp_example = InputExample(texts=[row['local_tuple'], row['external_tuple']], label=score)
+
+    if row['split'] == 'dev':
+        dev_samples.append(inp_example)
+    elif row['split'] == 'test':
+        test_samples.append(inp_example)
+    else:
+        train_samples.append(inp_example)
 
 
 
@@ -101,7 +116,7 @@ train_loss = losses.CosineSimilarityLoss(model=model)
 
 
 # Development set: Measure correlation between cosine score and gold labels
-logging.info("Read STSbenchmark dev dataset")
+logging.info("Read Drug dev dataset")
 evaluator = EmbeddingSimilarityEvaluator.from_input_examples(dev_samples, name='sts-dev')
 
 

@@ -19,8 +19,9 @@ class PairDataset(Dataset):
     def __init__(self, path, max_length) -> None:
         super(PairDataset).__init__()
 
-        original_data = pd.read_csv(path,index_col=False)
-        self.data = original_data[original_data.columns[:2]]
+        original_data = pd.read_csv(path,index_col='split')
+
+        self.data=original_data[original_data.columns[:2]]
         self.labels=original_data['relevant']
         self.max_length = max_length
 
@@ -33,7 +34,6 @@ class PairDataset(Dataset):
 
 
     def __getitem__(self, index):
-        # 字符串处理
         local_tuple = self.data.local_tuple[index].split()
         external_tuple = self.data.external_tuple[index].split()
         label=self.labels[index]
@@ -42,7 +42,7 @@ class PairDataset(Dataset):
         external_tuple = np.array([self.tokenize(x) for x in external_tuple])
        
 
-        # 补齐
+
         local_tuple = np.pad(local_tuple, (0, self.max_length - local_tuple.shape[0]), 'constant', constant_values=(0, 0))
         external_tuple = np.pad(external_tuple, (0, self.max_length - external_tuple.shape[0]), 'constant', constant_values=(0, 0))
        

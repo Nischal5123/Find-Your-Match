@@ -8,7 +8,7 @@ import torch.utils.data as tud
 
 # Custom dependencies
 sys.path.append('/projects/../../PythonNotebooks/model/')
-from helper import *
+
 
 
 class Dataset(tud.Dataset):
@@ -23,7 +23,7 @@ class Dataset(tud.Dataset):
         """
 
         # Ensuring reproducibility
-        set_seed()
+
 
         # Data loading
         self.DataFrame = DataFrame

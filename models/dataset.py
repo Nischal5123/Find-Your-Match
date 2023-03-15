@@ -1,62 +1,77 @@
-import pandas as pd
 import torch
-import numpy as np
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pack_padded_sequence, pad_sequence
+from transformers import AutoTokenizer, AutoModel, GPT2Tokenizer, GPT2Model
+import helper
+from torch.utils.data import DataLoader
 import logging
+import tqdm
 
-
-#### Just some code to print debug information to stdout
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO,
                     )
-#### /print debug information to stdout
 
-#Check if dataset exsist. If not, download and extract  it
-dataset_path = 'datasets/'  # REPLACE THIS WITH OUR DATASET "TUPLE-1", "TUPLE-2" , "SCORE"
+class TupleData(Dataset):
+    def __init__(self, dataset, languageModel='gpt2'):
+        self.tokenizer = None
+        self.pad_token = None
 
-class PairDataset(Dataset):
-    def __init__(self, path, max_length) -> None:
-        super(PairDataset).__init__()
+        if languageModel == 'gpt2':
+            self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+            self.pad_token = self.tokenizer(self.tokenizer.eos_token)['input_ids'][0]
 
-        original_data = pd.read_csv(path,index_col='split')
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained('michiyasunaga/LinkBERT-large')
+            self.pad_token = self.tokenizer.pad_token_id
 
-        self.data=original_data[original_data.columns[:2]]
-        self.labels=original_data['relevant']
-        self.max_length = max_length
+        self.local_tuple = list(dataset["local_tuple"])
+        self.external_tuple = list(dataset["external_tuple"])
+        self.relevant = list(dataset["relevant"])
 
     def __len__(self):
-        return len(self.data)
+        return len(self.relevant)
 
-    def tokenize(self,word):
-        #implement a tokenizer placeholder
-        return np.random.uniform(1,self.max_length)
+    def __getitem__(self, idx):
+        return self.tokenizer(self.local_tuple[idx], return_tensors="pt"), self.tokenizer(self.external_tuple[idx],
+                                                                                          return_tensors="pt"), \
+               self.relevant[idx]
+
+def pad_collate(batch):
+  (xx1, xx2, yy) = zip(*batch)
+  xx1_input = tuple(x['input_ids'].squeeze(0) for x in xx1)
+  xx2_input = tuple(x['input_ids'].squeeze(0) for x in xx2)
+
+  xx1_attnMask = tuple(x['attention_mask'].squeeze(0) for x in xx1)
+  xx2_attnMask = tuple(x['attention_mask'].squeeze(0) for x in xx2)
+
+  x1_lens = [len(x) for x in xx1_input]
+  x2_lens = [len(x) for x in xx2_input]
+
+  xx1_input_pad = pad_sequence(xx1_input, batch_first=True, padding_value=0)
+  xx2_input_pad = pad_sequence(xx2_input, batch_first=True, padding_value=0)
+
+  xx1_mask_pad = pad_sequence(xx1_attnMask, batch_first=True, padding_value=0)
+  xx2_mask_pad = pad_sequence(xx2_attnMask, batch_first=True, padding_value=0)
+
+  yy = torch.tensor(yy)
+
+  return xx1_input_pad, xx1_mask_pad, xx2_input_pad, xx2_mask_pad, yy, x1_lens, x2_lens
 
 
-    def __getitem__(self, index):
-        local_tuple = self.data.local_tuple[index].split()
-        external_tuple = self.data.external_tuple[index].split()
-        label=self.labels[index]
-    
-        local_tuple = np.array([self.tokenize(x) for x in local_tuple])
-        external_tuple = np.array([self.tokenize(x) for x in external_tuple])
-       
+def main():
+    googleTrainData, googleTestData = helper.createDatasets("datasets/google")
+    googleTrain = TupleData(googleTrainData, 'linkbert')
+    googleTest = TupleData(googleTestData, 'linkbert')
+
+    B = 2
+    train_loader = DataLoader(googleTrain, batch_size=B, shuffle=True, collate_fn=pad_collate)
+    test_loader = DataLoader(googleTest, batch_size=200, shuffle=False, collate_fn=pad_collate)
+    for batch_idx, batch in enumerate(train_loader):
+        xx1_input_pad, xx1_mask_pad, xx2_input_pad, xx2_mask_pad, yy, x1_lens, x2_lens = batch
+        print(len(xx1_input_pad), len(x1_lens))
 
 
-        local_tuple = np.pad(local_tuple, (0, self.max_length - local_tuple.shape[0]), 'constant', constant_values=(0, 0))
-        external_tuple = np.pad(external_tuple, (0, self.max_length - external_tuple.shape[0]), 'constant', constant_values=(0, 0))
-       
 
-        return local_tuple, external_tuple,label
-
-
-if __name__ == "__main__":
-    maxlength=500
-    batch_size=50
-    dataset = PairDataset(dataset_path+"positive.csv", maxlength)
-    dataloader = DataLoader(dataset, batch_size=batch_size,
-                        shuffle=False, num_workers=0,  collate_fn=None)
-
-    for batch_idx, batch in enumerate(dataloader):
-        sent1,sent2, target = batch
-        print(sent1.shape, target.shape)
+if __name__== "__main__":
+    main()

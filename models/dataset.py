@@ -19,10 +19,10 @@ class TupleData(Dataset):
 
         if languageModel == 'gpt2':
             self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-            self.pad_token = self.tokenizer(self.tokenizer.eos_token)['input_ids'][0]
+            #self.pad_token = self.tokenizer(self.tokenizer.eos_token)['input_ids'][0]
 
         else:
-            self.tokenizer = AutoTokenizer.from_pretrained('michiyasunaga/LinkBERT-large')
+            self.tokenizer = AutoTokenizer.from_pretrained('michiyasunaga/LinkBERT-large',model_max_length=3500)#maxlength in google dataset is around 3400
             self.pad_token = self.tokenizer.pad_token_id
 
         self.local_tuple = list(dataset["local_tuple"])
@@ -61,10 +61,10 @@ def pad_collate(batch):
 
 def main():
     googleTrainData, googleTestData = helper.createDatasets("datasets/google")
-    googleTrain = TupleData(googleTrainData, 'linkbert')
-    googleTest = TupleData(googleTestData, 'linkbert')
+    googleTrain = TupleData(googleTrainData, 'gpt2')
+    googleTest = TupleData(googleTestData, 'gpt2')
 
-    B = 2
+    B = 256
     train_loader = DataLoader(googleTrain, batch_size=B, shuffle=True, collate_fn=pad_collate)
     test_loader = DataLoader(googleTest, batch_size=200, shuffle=False, collate_fn=pad_collate)
     for batch_idx, batch in enumerate(train_loader):
